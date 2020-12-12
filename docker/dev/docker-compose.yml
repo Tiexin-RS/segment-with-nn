@@ -1,0 +1,8 @@
+version: "3"
+services: 
+  dev:
+    build: .
+    tty: true
+    stdin_open: true
+    volumes: 
+      - ./:/opt/docker-compose.yml

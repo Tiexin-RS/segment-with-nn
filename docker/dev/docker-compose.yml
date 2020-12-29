@@ -7,3 +7,5 @@ services:
     runtime: nvidia
     volumes: 
       - ./:/opt/docker-compose.yml
+    env_file: ./.env
+    user: "${UID}:${GID}"

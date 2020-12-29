@@ -6,6 +6,7 @@ services:
     stdin_open: true
     runtime: nvidia
     volumes: 
-      - ./:/opt/docker-compose.yml
+      - ./:/opt/segelectri
+      - ${DATA_DIR}:/opt/dataset
     env_file: ./.env
     user: "${UID}:${GID}"

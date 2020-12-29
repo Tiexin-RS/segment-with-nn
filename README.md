@@ -10,6 +10,7 @@ segmentation using nerual network way
     ``` bash
     UID=1002
     GID=1002
+    DATA_DIR=/path/to/dataset
     ```
 
 ### Start dev containers!

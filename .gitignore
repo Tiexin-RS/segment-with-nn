@@ -131,3 +131,4 @@ dmypy.json
 # ignore root files
 /docker-compose.yml
 /Dockerfile
+.vscode/

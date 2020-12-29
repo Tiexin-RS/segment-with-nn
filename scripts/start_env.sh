@@ -6,4 +6,4 @@ ln -s $1/Dockerfile Dockerfile
 
 echo Starting containers...
 # echo DEBUG: pwd is `pwd`
-docker-compose up -d
+docker-compose up --build -d

@@ -1,12 +1,16 @@
 version: "3"
 services: 
   dev:
-    build: .
+    user: "${UID}:${GID}"
+    build: 
+      context: .
+      args: 
+        ARG_UID: ${UID}
+        ARG_GID: ${GID}
     tty: true
     stdin_open: true
+    env_file: .env
     runtime: nvidia
     volumes: 
-      - ./:/opt/segelectri
-      - ${DATA_DIR}:/opt/dataset
-    env_file: ./.env
-    user: "${UID}:${GID}"
+      - ./:/opt/segelectri:rw
+      - ${DATA_DIR}:/opt/dataset:rw

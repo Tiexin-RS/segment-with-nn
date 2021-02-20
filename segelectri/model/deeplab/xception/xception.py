@@ -9,7 +9,7 @@ from tensorflow.keras.layers import (Activation, Add, BatchNormalization, Concat
 from segelectri.model.deeplab.xception.xception_block import XceptionBlock
 
 class Xception(tf.keras.layers.Layer):
-    """Implements the Atrous Spatial Pyramid Pooling.
+    """Implements Xception.
     Reference:
         [Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation](
           https://arxiv.org/pdf/1802.02611.pdf)

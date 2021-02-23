@@ -2,6 +2,7 @@
 ''' layer impl used for deeplab model 
 '''
 import tensorflow as tf
+from tensorflow import keras
 
 
 class SpatialPyramidPooling(tf.keras.layers.Layer):
@@ -163,8 +164,6 @@ class SpatialPyramidPooling(tf.keras.layers.Layer):
                 self.dilation_rates,
             'pool_kernel_size':
                 self.pool_kernel_size,
-            'use_sync_bn':
-                self.use_sync_bn,
             'batchnorm_momentum':
                 self.batchnorm_momentum,
             'batchnorm_epsilon':
@@ -181,4 +180,65 @@ class SpatialPyramidPooling(tf.keras.layers.Layer):
                 self.interpolation,
         }
         base_config = super(SpatialPyramidPooling, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class Decoder(keras.layers.Layer):
+    """Implmentation of Decdoer for DeeplabV3+
+    """
+
+    def __init__(self, num_classes=10, upsample_factor=16, **kwargs):
+        """Initializes `Decoder`.
+        Args:
+            num_class: `int` output channels suggests the classes for prediction
+            upsample_factor: `int` division between original input image and aspp layer output
+            **kwargs: Other keyword arguments for the layer
+        """
+        super(Decoder, self).__init__(**kwargs)
+
+        self.num_classes = num_classes
+
+        if not isinstance(upsample_factor, list):
+            upsample_factor = (upsample_factor, upsample_factor)
+        self.upsample_factor = upsample_factor
+
+    def build(self, input_shape):
+        low_feats_shape, high_feats_shape = input_shape
+
+        high_feats_unsample_rate = (low_feats_shape[1] // high_feats_shape[1],
+                                    low_feats_shape[2] // high_feats_shape[2])
+        self.high_feats_upsample = keras.layers.UpSampling2D(
+            size=high_feats_unsample_rate, interpolation='bilinear')
+        self.low_feats_conv = keras.layers.Conv2D(filters=high_feats_shape[-1],
+                                                  kernel_size=(1, 1))
+        outputs_unsample_rates = (self.upsample_factor[0] //
+                                  high_feats_unsample_rate[0],
+                                  self.upsample_factor[1] //
+                                  high_feats_unsample_rate[1])
+        self.upsample_seq = keras.Sequential([
+            keras.layers.Conv2D(filters=self.num_classes,
+                                kernel_size=(3, 3),
+                                padding='same'),
+            keras.layers.UpSampling2D(size=outputs_unsample_rates,
+                                      interpolation='bilinear')
+        ])
+
+    def call(self, inputs, **kwargs):
+        """ call inputs with list as [low_feats, high_feats]
+        """
+        low_feats, high_feats = inputs
+        x = tf.concat([
+            self.low_feats_conv(low_feats),
+            self.high_feats_upsample(high_feats)
+        ],
+                      axis=-1)
+        outputs = self.upsample_seq(x)
+        return outputs
+
+    def get_config(self):
+        config = {
+            'num_classes': self.num_classes,
+            'upsample_factor': self.upsample_factor,
+        }
+        base_config = super(Decoder, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

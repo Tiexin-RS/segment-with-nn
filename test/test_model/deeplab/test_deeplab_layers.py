@@ -2,8 +2,9 @@
 ''' test case for deeplab layers
 '''
 import tensorflow as tf
+from tensorflow.python.keras.backend import dtype
 
-from segelectri.model.deeplab.deeplab_layers import SpatialPyramidPooling
+from segelectri.model.deeplab.deeplab_layers import Decoder, SpatialPyramidPooling
 
 
 class TestDeeplabLayers(tf.test.TestCase):
@@ -24,3 +25,15 @@ class TestDeeplabLayers(tf.test.TestCase):
                                      dilation_rates=[1, 6, 12])
         outputs = aspp(fake_input)
         self.assertAllEqual(outputs.shape, [1, 64, 64, 128])
+
+    def test_decoder(self):
+        fake_low_feats = tf.keras.Input((128, 128, 256), dtype=tf.float32)
+        fake_high_feats = tf.keras.Input((32, 32, 128), dtype=tf.float32)
+
+        decoder = Decoder(num_classes=6, upsample_factor=16)
+
+        outputs = decoder([fake_low_feats, fake_high_feats])
+        self.assertAllEqual(outputs.shape, [None, 512, 512, 6])
+
+        decoder_serial = decoder.get_config()
+        self.assertTrue(decoder_serial['num_classes'], 6)

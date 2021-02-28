@@ -9,9 +9,6 @@ from segelectri.train.train_routine import TrainRoutine
 class TestTrainRoutine(unittest.TestCase):
 
     def test_ensure_dir_exists(self):
-        os.removedirs('demo')
-        os.removedirs('ex')
-
         TrainRoutine._ensure_dir_exists('demo')
 
         os.mkdir('ex')

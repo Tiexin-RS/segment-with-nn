@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import MaxPool2D
@@ -17,8 +16,8 @@ class FocalLoss(tf.keras.losses.Loss):
     def call(self, y_true, y_pred):
         y_true = tf.one_hot(y_true, y_pred.shape[3])
         y_pred += K.epsilon()
-        ce = -y_true * np.log(y_pred)
-        weight = np.power(1 - y_pred, self.gamma) * y_true
+        ce = -y_true * tf.math.log(y_pred)
+        weight = tf.math.pow(1 - y_pred, self.gamma) * y_true
         fl = ce * weight * self.alpha
         loss = tf.reduce_mean(fl)
         return loss

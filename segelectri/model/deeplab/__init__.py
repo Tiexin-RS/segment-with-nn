@@ -30,3 +30,18 @@ class Deeplab(keras.Model):
         outputs = self.decoder([skip_feats, high_feats])
 
         return outputs
+
+    def get_config(self):
+        xception_config = self.xception.get_config()
+        aspp_config = self.aspp.get_config()
+        decoder_config = self.decoder.get_config()
+        base_config = super().get_config()
+
+        config = {
+            'xception': xception_config,
+            'aspp': aspp_config,
+            'decoder_config': decoder_config
+        }
+        config.update(base_config)
+
+        return config

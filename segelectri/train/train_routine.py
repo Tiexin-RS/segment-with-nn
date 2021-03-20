@@ -40,17 +40,20 @@ class TrainRoutine:
 
         return tensorboard_dir, saved_model_dir, config_dir, log_dir
 
-    def run(self, exp_dir, epochs, batch_size):
+    def run(self, exp_dir, epochs, batch_size=None):
         tensorboard_dir, saved_model_dir, config_dir, log_dir = TrainRoutine._make_needed_dirs(
             exp_dir=exp_dir)
-
-        logging.basicConfig(filename=os.path.join(log_dir, 'syslog'),
-                            level=logging.INFO)
+        fh = logging.FileHandler(os.path.join(log_dir,
+                                             
+                                              'syslog')).setLevel(logging.DEBUG)
+        tf.get_logger().addHandler(fh)
 
         cbs = [keras.callbacks.TensorBoard(tensorboard_dir)]
-        self.model.fit(x=self.dataset.batch(batch_size=batch_size),
-                       epochs=epochs,
-                       callbacks=cbs)
+        if batch_size:
+            ds = self.dataset.batch(batch_size=batch_size)
+        else:
+            ds = self.dataset
+        self.model.fit(ds, epochs=epochs, callbacks=cbs)
 
         self.model.save(saved_model_dir)
 

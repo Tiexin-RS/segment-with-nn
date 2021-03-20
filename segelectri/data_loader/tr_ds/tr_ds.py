@@ -82,8 +82,13 @@ def process_tr_data(original_pattern: str, mask_pattern: str,
     Returns:
         tf.data.Dataset: ds for process imgs
     """
+    data_path = os.path.join(processed_img_path, 'data')
+    label_path = os.path.join(processed_img_path, 'label')
     if not os.path.exists(processed_img_path):
         os.mkdir(processed_img_path)
+    os.makedirs(data_path, exist_ok=True)
+    os.makedirs(label_path, exist_ok=True)
+
     generator = generate_files(original_pattern, mask_pattern)
     output_signature = (tf.TensorSpec(shape=(), dtype=tf.string),
                         tf.TensorSpec(shape=(), dtype=tf.string))
@@ -94,8 +99,8 @@ def process_tr_data(original_pattern: str, mask_pattern: str,
 
     print("Saving cropped image...")
     for idx, (o, m) in enumerate(ds):
-        original_path = os.path.join(processed_img_path, f'{idx}.png')
-        mask_path = os.path.join(processed_img_path, f'{idx}_class.png')
+        original_path = os.path.join(data_path, f'{idx}.png')
+        mask_path = os.path.join(label_path, f'{idx}.png')
         save_img(o, original_path)
         save_img(m, mask_path)
     print("Saved...")
@@ -117,19 +122,21 @@ def get_tr_ds(original_pattern: str,
     Returns:
         tf.data.Dataset: dataset of data
     """
-    ds = tf.data.Dataset.from_generator(
-        generate_files(original_pattern, mask_pattern),
-        output_signature=(tf.TensorSpec(shape=(), dtype=tf.string),
-                          tf.TensorSpec(shape=(), dtype=tf.string)))
-    ds = ds.prefetch(buffer_size=buffer_size)\
-        .map(py_func_parse_img_and_mask, num_parallel_calls=tf.data.AUTOTUNE)\
-        .map(py_func_stack_into_one, num_parallel_calls=tf.data.AUTOTUNE)\
-        .batch(batch_size)
+    original_imgs = sorted(glob.glob(original_pattern))
+    mask_imgs = sorted(glob.glob(mask_pattern))
+    ds = tf.data.Dataset.from_tensor_slices((original_imgs, mask_imgs))\
+        .map(py_func_parse_img_and_mask, num_parallel_calls=tf.data.AUTOTUNE)
+    if batch_size:
+        ds = ds.batch(batch_size=batch_size)
 
     return ds
 
 
 if __name__ == "__main__":
-    ds = process_tr_data('/opt/dataset/tr2/clip_*.png',
-                         '/opt/dataset/tr2/clip_class_*.tif',
-                         '/opt/dataset/tr2_cropped/')
+    # ds = process_tr_data('/opt/dataset/tr2/clip_*.png',
+    #                      '/opt/dataset/tr2/clip_class_*.tif',
+    #                      '/opt/dataset/tr2_cropped/')
+
+    ds = process_tr_data('/opt/dataset/tr3/clip_*.bmp',
+                         '/opt/dataset/tr3/class_clip_*.tif',
+                         '/opt/dataset/tr3_cropped/')

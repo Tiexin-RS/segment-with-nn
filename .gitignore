@@ -132,4 +132,4 @@ dmypy.json
 /docker-compose.yml
 /Dockerfile
 .vscode/
-/exp*
+exp*

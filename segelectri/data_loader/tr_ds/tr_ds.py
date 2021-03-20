@@ -122,10 +122,12 @@ def get_tr_ds(original_pattern: str,
     Returns:
         tf.data.Dataset: dataset of data
     """
+    decode_image_fn = lambda o: tf.image.decode_image(tf.io.read_file(o))
+
     original_imgs = sorted(glob.glob(original_pattern))
     mask_imgs = sorted(glob.glob(mask_pattern))
     ds = tf.data.Dataset.from_tensor_slices((original_imgs, mask_imgs))\
-        .map(py_func_parse_img_and_mask, num_parallel_calls=tf.data.AUTOTUNE)
+        .map(lambda d, l: (decode_image_fn(d), decode_image_fn(l)), num_parallel_calls=tf.data.AUTOTUNE)
     if batch_size:
         ds = ds.batch(batch_size=batch_size)
 

@@ -52,8 +52,8 @@ class upsamp_conv(keras.layers.Layer):
                                 kernel_size=(3, 3),
                                 padding='same'),
             keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear'),
-            keras.layers.Conv2D(filters = self.filters_num//2,
-                                kernel_size = (2,2),
+            keras.layers.Conv2D(filters=self.filters_num / 2,
+                                kernel_size=(2, 2),
                                 padding='same')
         ])
 
@@ -81,16 +81,17 @@ class Unet(keras.layers.Layer):
 
     def build(self, input_shape):
         self.shape = input_shape
-        
-        self.down_conv1 = downsamp_conv(self.kernel_num_seq[0])
-        self.down_conv2 = downsamp_conv(self.kernel_num_seq[1])
-        self.down_conv3 = downsamp_conv(self.kernel_num_seq[2])
-        self.down_conv4 = downsamp_conv(self.kernel_num_seq[3])
 
-        self.up_conv1 = upsamp_conv(self.kernel_num_seq[-1])
-        self.up_conv2 = upsamp_conv(self.kernel_num_seq[-2])
-        self.up_conv3 = upsamp_conv(self.kernel_num_seq[-3])
-        self.up_conv4 = upsamp_conv(self.kernel_num_seq[-4])
+        # use loop to wrap a list
+        self.down_conv_layers = []
+        for i in range(4):
+            self.down_conv_layers.append(downsamp_conv(self.kernel_num_seq[i]))
+
+        # use loop to wrap a list
+        self.up_conv_layers = []
+        for i in range(4):
+            self.up_conv_layers.append(upsamp_conv(self.kernel_num_seq[-i -
+                                                                       1]))
 
         self.output_seq = keras.Sequential([
             keras.layers.Conv2D(filters=self.kernel_num_seq[0],
@@ -107,25 +108,31 @@ class Unet(keras.layers.Layer):
         self.pooling = keras.layers.MaxPooling2D(pool_size=(2, 2))
 
     def call(self, inputs):
-        tf.cast(inputs,dtype = tf.float32)
+        tf.cast(inputs, dtype=tf.float32)
+        # print(inputs)
+        x = inputs
 
-        conv1 = self.down_conv1(inputs)
-        pool1 = self.pooling(conv1)
-        conv2 = self.down_conv2(pool1)
-        pool2 = self.pooling(conv2)
-        conv3 = self.down_conv3(pool2)
-        pool3 = self.pooling(conv3)
-        conv4 = self.down_conv4(pool3)
-        pool4 = self.pooling(conv4)
+        self.conv_list = []
+        self.pool_list = []
 
-        up_samp1 = self.up_conv1(pool4)
-        corp1 = tf.concat([conv4, up_samp1], axis=-1)
-        up_samp2 = self.up_conv2(corp1)
-        corp2 = tf.concat([conv3, up_samp2], axis=-1)
-        up_samp3 = self.up_conv3(corp2)
-        corp3 = tf.concat([conv2, up_samp3], axis=-1)
-        up_samp4 = self.up_conv4(corp3)
-        corp4 = tf.concat([conv1, up_samp4], axis=-1)
-        output = self.output_seq(corp4)
-        
+        for i in range(4):
+            self.conv_list.append(self.down_conv_layers[i](x))
+            self.pool_list.append(self.pooling(self.conv_list[-1]))
+            x = self.pool_list[-1]
+
+        self.up_samp_list = []
+        self.corp_list = []
+        self.up_samp_list.append(self.up_conv_layers[0](
+            self.pool_list[-1]))  # init
+
+        for i in range(3):
+            self.corp_list.append(
+                tf.concat([self.conv_list[-i - 1], self.up_samp_list[i]],
+                          axis=-1))
+            self.up_samp_list.append(self.up_conv_layers[i + 1](
+                self.corp_list[i]))
+
+        self.corp_list.append(
+            tf.concat([self.conv_list[0], self.up_samp_list[-1]], axis=-1))
+        output = self.output_seq(self.corp_list[-1])
         return output

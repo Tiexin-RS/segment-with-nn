@@ -3,10 +3,11 @@ import tensorflow as tf
 
 
 class TestUnet(tf.test.TestCase):
-    def test_weights(self):
+    def testWeights(self):
         fake_input = tf.keras.Input((512, 512, 1), dtype=tf.float32)
         unet = unet_t.Unet()
         output = unet(fake_input)
+        print(output.shape)
         # test output.shape
         self.assertAllEqual(output.shape, [None, 512, 512, 10])
         # test weights.shape
@@ -22,9 +23,8 @@ class TestUnet(tf.test.TestCase):
              (2, 2, 128, 64), (64, ), (3, 3, 128, 64), (64, ), (3, 3, 64, 64),
              (64, ), (3, 3, 64, 10), (10, )]
         for i in range(len(unet.weights)):
-            self.assertAllEqual(unet.weights[i].shape,w[i])
+            self.assertAllEqual(unet.weights[i].shape, w[i])
 
 
 if __name__ == "__main__":
-    tmp = TestUnet()
-    tmp.test_weights()
+    tf.test.main()

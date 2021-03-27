@@ -39,6 +39,4 @@ class TestDeeplabLayers(tf.test.TestCase):
 
 
 if __name__ == '__main__':
-    test = TestDeeplabLayers()
-    test.test_aspp_with_real_input()
-    test.test_decoder()
+    tf.test.main()

@@ -12,37 +12,35 @@ class Deeplab(keras.Model):
     def __init__(self,
                  dilation_rates=[1, 2, 4, 6, 12],
                  num_classes=3,
+                 backbone='mobilenet',
                  *args,
                  **kwargs):
         super(Deeplab, self).__init__(*args, **kwargs)
 
         self.dilation_rates = dilation_rates
         self.num_classes = num_classes
-
-        # self.xception = Xception()
-        self.mobilenet = Mobilenet()
+        if backbone=='mobilenet':
+            self.backbone = Mobilenet()
+        elif backbone=='xception':
+            self.backbone = Xception()
         self.aspp = SpatialPyramidPooling(output_channels=256,
                                           dilation_rates=self.dilation_rates)
         self.decoder = Decoder(num_classes=num_classes, upsample_factor=16)
 
     def call(self, inputs):
-        # outputs, skip_feats = self.xception(inputs)
-        outputs, skip_feats = self.mobilenet(inputs)
+        outputs, skip_feats = self.backbone(inputs)
         high_feats = self.aspp(outputs)
         outputs = self.decoder([skip_feats, high_feats])
-
         return outputs
 
     def get_config(self):
-        # xception_config = self.xception.get_config()
-        mobilenet_config = self.mobilenet.get_config()
+        backbone_config = self.backbone.get_config()
         aspp_config = self.aspp.get_config()
         decoder_config = self.decoder.get_config()
         # base_config = super(Deeplab, self).get_config()
 
         config = {
-            # 'xception': xception_config,
-            'mobilenet': mobilenet_config,
+            'backbone': backbone_config,
             'aspp': aspp_config,
             'decoder_config': decoder_config
         }

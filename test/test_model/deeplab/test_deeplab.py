@@ -15,8 +15,6 @@ class TestDeeplabLayers(tf.test.TestCase):
                                        dtype=tf.float32)
 
         deeplab = Deeplab(num_classes=10)
-        # deeplab.build((1, 1024, 1024, 3))
-        # deeplab.summary()
         output = deeplab(fake_input)
         self.assertAllEqual(output.shape, [1, 1024, 1024, 10])
 

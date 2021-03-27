@@ -1,5 +1,5 @@
 import tensorflow as tf
-from segelectri.model.deeplab.mobilenet.backbones import BACKBONES
+from segelectri.model.deeplab.backbones import BACKBONES
 
 class Mobilenet(tf.keras.layers.Layer):
     def __init__(self, backbone='mobilenetv2', **kwargs):

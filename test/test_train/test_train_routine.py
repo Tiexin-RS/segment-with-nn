@@ -75,5 +75,4 @@ class TestTrainRoutine(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    TestTrainRoutine().diff_model()
-    # unittest.main()
+    unittest.main()

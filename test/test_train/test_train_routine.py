@@ -45,7 +45,7 @@ class TestTrainRoutine(unittest.TestCase):
 
         self.assertTrue(os.path.exists('exp/config/exp_config.json'))
 
-    def test_diff_model(self):
+    def diff_model(self):
         with tf.device('cpu'):
             ds = get_tr_ds(
                 original_pattern='/opt/dataset/tr2_cropped/data/*.png',
@@ -64,16 +64,16 @@ class TestTrainRoutine(unittest.TestCase):
         # model.trainable = True
         model.compile(
             optimizer=tf.keras.optimizers.Adam(),
-            # loss=tf.keras.losses.BinaryCrossentropy(),
-            loss=FocalLoss()
+            loss=tf.keras.losses.BinaryCrossentropy(),
+            # loss=FocalLoss()
         )
         #   metrics=[tf.keras.metrics.MeanIoU(num_classes=3)])
         routine = TrainRoutine(ds=ds, model=model)
-        routine.run(exp_dir='exp/03', epochs=1)
+        routine.run(exp_dir='exp/01', epochs=1)
 
-        self.assertTrue(os.path.exists('exp/03/config/exp_config.json'))
+        self.assertTrue(os.path.exists('exp/01/config/exp_config.json'))
 
 
 if __name__ == '__main__':
-    TestTrainRoutine().test_diff_model()
+    TestTrainRoutine().diff_model()
     # unittest.main()

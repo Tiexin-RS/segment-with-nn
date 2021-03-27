@@ -45,15 +45,15 @@ class XceptionBlock(tf.keras.layers.Layer):
                           depth_activation=self.depth_activation)
             ])
             self.sepconv_layers.append(sepconv)
-
-        self.conv_connect = tf.keras.Sequential([
-            Conv2dSame(filters=self.depth_list[-1],
-                       kernel_size=1,
-                       stride=self.stride),
-            BatchNormalization(axis=bn_axis,
-                               momentum=self.batchnorm_momentum,
-                               epsilon=self.batchnorm_epsilon)
-        ])
+        if self.skip_connection_type == 'conv':
+            self.conv_connect = tf.keras.Sequential([
+                Conv2dSame(filters=self.depth_list[-1],
+                        kernel_size=1,
+                        stride=self.stride),
+                BatchNormalization(axis=bn_axis,
+                                momentum=self.batchnorm_momentum,
+                                epsilon=self.batchnorm_epsilon)
+            ])
 
     def call(self, inputs, training=None):
         if training is None:

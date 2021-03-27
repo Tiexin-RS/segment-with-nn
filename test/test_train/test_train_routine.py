@@ -45,27 +45,35 @@ class TestTrainRoutine(unittest.TestCase):
 
         self.assertTrue(os.path.exists('exp/config/exp_config.json'))
 
-    def diff_model(self):
-        ds = get_tr_ds(original_pattern='/opt/dataset/tr2_cropped/data/*.png',
-                       mask_pattern='/opt/dataset/tr2_cropped/label/*.png',
-                       batch_size=16)
+    def test_diff_model(self):
+        with tf.device('cpu'):
+            ds = get_tr_ds(
+                original_pattern='/opt/dataset/tr2_cropped/data/*.png',
+                mask_pattern='/opt/dataset/tr2_cropped/label/*.png',
+                batch_size=2)
 
-        def reshape_fn(d, l):
-            d = tf.cast(tf.reshape(d, (-1, 1024, 1024, 3)), tf.float32)
-            l = tf.reshape(l, (-1, 1024, 1024, 3))
-            return d, l
+            def reshape_fn(d, l):
+                d = tf.cast(tf.reshape(d,
+                                        (-1, 1024, 1024, 3)), tf.float32) / 255.0
+                l = tf.reshape(l, (-1, 1024, 1024, 3))
+                return d, l
 
-        ds = ds.map(reshape_fn)
+            ds = ds.map(reshape_fn)
+
         model = Deeplab(num_classes=3)
         # model.trainable = True
-        model.compile(optimizer=tf.keras.optimizers.Adam(),
-                      loss=FocalLoss(),
-                      metrics=[tf.keras.metrics.MeanIoU(num_classes=3)])
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(),
+            # loss=tf.keras.losses.BinaryCrossentropy(),
+            loss=FocalLoss()
+        )
+        #   metrics=[tf.keras.metrics.MeanIoU(num_classes=3)])
         routine = TrainRoutine(ds=ds, model=model)
-        routine.run(exp_dir='exp/01', epochs=1)
+        routine.run(exp_dir='exp/03', epochs=1)
 
-        self.assertTrue(os.path.exists('exp/01/config/exp_config.json'))
+        self.assertTrue(os.path.exists('exp/03/config/exp_config.json'))
 
 
 if __name__ == '__main__':
-    unittest.main()
+    TestTrainRoutine().test_diff_model()
+    # unittest.main()

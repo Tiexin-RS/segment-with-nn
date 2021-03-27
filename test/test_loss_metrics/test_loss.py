@@ -40,3 +40,9 @@ class TestLoss(tf.test.TestCase):
         boundaryl = BoundaryLoss()
         loss = boundaryl(self.y_true, self.y_pred)
         self.assertAllEqual(loss.shape, ())
+
+
+if __name__ == '__main__':
+    test = TestLoss()
+    test.setUp()
+    test.test_focal_loss()

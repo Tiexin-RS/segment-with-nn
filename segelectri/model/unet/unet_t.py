@@ -3,7 +3,7 @@ from tensorflow import keras
 
 
 class downsamp_conv(keras.layers.Layer):
-    def __init__(self, filters_num=128, **kwargs):
+    def __init__(self, filters_num=128,**kwargs):
         """Initialize 'downsamp_conv'
         Args:
             filters_num:num of filters in corresponding layer when downsampling
@@ -72,11 +72,14 @@ class Unet(keras.layers.Layer):
         """
         super(Unet, self).__init__(**kwargs)
         self.min_kernel_num = min_kernel_num // 1  #assure that is a int
-        self.kernel_num_seq = [
+        self.down_kernel_num_seq = [
             self.min_kernel_num, self.min_kernel_num * 2,
-            self.min_kernel_num * 4, self.min_kernel_num * 8,
-            self.min_kernel_num * 16
-        ]
+            self.min_kernel_num * 4, self.min_kernel_num * 8
+        ] # default 4 layers
+        self.up_kernel_num_seq = self.down_kernel_num_seq.copy() 
+        self.up_kernel_num_seq.append(self.down_kernel_num_seq[-1]*2)
+        self.up_kernel_num_seq = self.up_kernel_num_seq[:0:-1] # 反序list 
+        # 并且减去一层最上层 交给output处理以进行语义分割
         self.num_classes = num_classes
 
     def build(self, input_shape):
@@ -84,20 +87,20 @@ class Unet(keras.layers.Layer):
 
         # use loop to wrap a list
         self.down_conv_layers = []
-        for i in range(4):
-            self.down_conv_layers.append(downsamp_conv(self.kernel_num_seq[i]))
-
+        for k in self.down_kernel_num_seq:
+            self.down_conv_layers.append(downsamp_conv(k))
+        
         # use loop to wrap a list
         self.up_conv_layers = []
-        for i in range(4):
-            self.up_conv_layers.append(upsamp_conv(self.kernel_num_seq[-i -
-                                                                       1]))
+        
+        for k in self.up_kernel_num_seq:
+            self.up_conv_layers.append(upsamp_conv(k))
 
         self.output_seq = keras.Sequential([
-            keras.layers.Conv2D(filters=self.kernel_num_seq[0],
+            keras.layers.Conv2D(filters=self.down_kernel_num_seq[0],
                                 kernel_size=(3, 3),
                                 padding='same'),
-            keras.layers.Conv2D(filters=self.kernel_num_seq[0],
+            keras.layers.Conv2D(filters=self.down_kernel_num_seq[0],
                                 kernel_size=(3, 3),
                                 padding='same'),
             keras.layers.Conv2D(filters=self.num_classes,
@@ -115,24 +118,20 @@ class Unet(keras.layers.Layer):
         self.conv_list = []
         self.pool_list = []
 
-        for i in range(4):
-            self.conv_list.append(self.down_conv_layers[i](x))
+        for k in self.down_conv_layers:
+            self.conv_list.append(k(x))
             self.pool_list.append(self.pooling(self.conv_list[-1]))
             x = self.pool_list[-1]
 
         self.up_samp_list = []
         self.corp_list = []
-        self.up_samp_list.append(self.up_conv_layers[0](
-            self.pool_list[-1]))  # init
+        
+        self.corp_list.append(self.pool_list[-1]) # init
+        tmp_conv_list = self.conv_list[::-1]
 
-        for i in range(3):
-            self.corp_list.append(
-                tf.concat([self.conv_list[-i - 1], self.up_samp_list[i]],
-                          axis=-1))
-            self.up_samp_list.append(self.up_conv_layers[i + 1](
-                self.corp_list[i]))
-
-        self.corp_list.append(
-            tf.concat([self.conv_list[0], self.up_samp_list[-1]], axis=-1))
+        for c,u in zip(tmp_conv_list,self.up_conv_layers):
+            self.up_samp_list.append(u(self.corp_list[-1]))
+            self.corp_list.append(tf.concat([c,self.up_samp_list[-1]],axis = -1))
+        
         output = self.output_seq(self.corp_list[-1])
         return output

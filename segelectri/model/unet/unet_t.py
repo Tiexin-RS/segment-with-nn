@@ -28,7 +28,12 @@ class downsamp_conv(keras.layers.Layer):
         output = self.conv_seq(inputs)
         return output
 
-    # def get_config(self):
+    def get_config(self):
+        config = {
+            'filter_num' : self.filters_num
+        }
+        base_config = super(downsamp_conv,self).get_config()
+        return dict(list(base_config.items())+list(config.items()))
 
 
 class upsamp_conv(keras.layers.Layer):
@@ -61,7 +66,12 @@ class upsamp_conv(keras.layers.Layer):
         output = self.upsample_seq(inputs)
         return output
 
-    # def get_config(self):
+    def get_config(self):
+        config = {
+            'filter_num' : self.filters_num
+        }
+        base_config = super(upsamp_conv,self).get_config()
+        return dict(list(base_config.items())+list(config.items()))
 
 
 class Unet(keras.layers.Layer):
@@ -72,15 +82,17 @@ class Unet(keras.layers.Layer):
         """
         super(Unet, self).__init__(**kwargs)
         self.min_kernel_num = min_kernel_num // 1  #assure that is a int
-        self.down_kernel_num_seq = [
-            self.min_kernel_num, self.min_kernel_num * 2,
-            self.min_kernel_num * 4, self.min_kernel_num * 8
-        ] # default 4 layers
+        self.num_classes = num_classes
+        self.depth = depth
+
+        self.down_kernel_num_seq = [] # default 4 layers
+        #根据层数生成
+        for i in range(depth):
+            self.down_kernel_num_seq.append(min_kernel_num*(2**i))
         self.up_kernel_num_seq = self.down_kernel_num_seq.copy() 
         self.up_kernel_num_seq.append(self.down_kernel_num_seq[-1]*2)
         self.up_kernel_num_seq = self.up_kernel_num_seq[:0:-1] # 反序list 
         # 并且减去一层最上层 交给output处理以进行语义分割
-        self.num_classes = num_classes
 
     def build(self, input_shape):
         self.shape = input_shape
@@ -112,7 +124,6 @@ class Unet(keras.layers.Layer):
 
     def call(self, inputs):
         tf.cast(inputs, dtype=tf.float32)
-        # print(inputs)
         x = inputs
 
         self.conv_list = []
@@ -135,3 +146,12 @@ class Unet(keras.layers.Layer):
         
         output = self.output_seq(self.corp_list[-1])
         return output
+
+    def get_config(self):
+        config = {
+            'min_kernel_num':self.min_kernel_num,
+            'num_classes':self.num_classes,
+            'depth':self.depth
+        }
+        base_config = super(Unet,self).get_config()
+        return dict(list(base_config.items())+list(config.items()))

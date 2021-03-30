@@ -75,7 +75,7 @@ class upsamp_conv(keras.layers.Layer):
 
 
 class Unet(keras.layers.Layer):
-    def __init__(self, min_kernel_num=64, num_classes=10, **kwargs):
+    def __init__(self, min_kernel_num=64, num_classes=10,depth = 4, **kwargs):
         """Initialize Unet
         Args:
             min_kernel_num:num of filters in the toppest layer
@@ -85,9 +85,10 @@ class Unet(keras.layers.Layer):
         self.num_classes = num_classes
         self.depth = depth
 
+
         self.down_kernel_num_seq = [] # default 4 layers
         #根据层数生成
-        for i in range(depth):
+        for i in range(self.depth):
             self.down_kernel_num_seq.append(min_kernel_num*(2**i))
         self.up_kernel_num_seq = self.down_kernel_num_seq.copy() 
         self.up_kernel_num_seq.append(self.down_kernel_num_seq[-1]*2)

@@ -5,7 +5,6 @@ import tensorflow as tf
 
 from segelectri.model.deeplab import Deeplab
 
-
 class TestDeeplabLayers(tf.test.TestCase):
 
     def test_xception_with_real_input(self):
@@ -18,7 +17,7 @@ class TestDeeplabLayers(tf.test.TestCase):
         output = deeplab(fake_input)
 
         self.assertAllEqual(output.shape, [1, 1024, 1024, 10])
-
+    
 
 if __name__ == '__main__':
     tf.test.main()

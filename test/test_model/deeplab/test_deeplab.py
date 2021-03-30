@@ -4,7 +4,6 @@
 import tensorflow as tf
 
 from segelectri.model.deeplab import Deeplab
-from segelectri.model.unet import unet_t
 
 class TestDeeplabLayers(tf.test.TestCase):
 

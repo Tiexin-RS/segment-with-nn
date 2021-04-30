@@ -133,3 +133,6 @@ dmypy.json
 /Dockerfile
 .vscode/
 exp*
+img*
+tmp*
+trt_savedmodel*

@@ -35,49 +35,59 @@ class Xception(tf.keras.layers.Layer):
             bn_axis = 1
 
         # pre
-        # 512,512,3 -> 256,256,32 -> 256,256,64
+        # 1024,1024,3 -> 512,512,32 -> 512,512,64
         self.pre_layers = []
         pre_filters = [32, 64]
         pre_strides = [2, 1]
         for i in range(len(pre_filters)):
-            conv_sequential = tf.keras.Sequential([
-                Conv2D(filters=pre_filters[i],
-                       kernel_size=(3, 3),
-                       padding='same',
-                       kernel_regularizer=self.kernel_regularizer,
-                       kernel_initializer=self.kernel_initializer,
-                       strides=(pre_strides[i], pre_strides[i]),
-                       use_bias=False),
+            if i==0:
+                conv_sequential = tf.keras.Sequential([
+                    Conv2D(filters=pre_filters[i],
+                        kernel_size=(3, 3),
+                        padding='same',
+                        kernel_regularizer=self.kernel_regularizer,
+                        kernel_initializer=self.kernel_initializer,
+                        strides=(pre_strides[i], pre_strides[i]),
+                        use_bias=False,
+                        input_shape=input_shape[1:]),
+                ])
+            else:
+                conv_sequential = tf.keras.Sequential([
+                    Conv2D(filters=pre_filters[i],
+                        kernel_size=(3, 3),
+                        padding='same',
+                        kernel_regularizer=self.kernel_regularizer,
+                        kernel_initializer=self.kernel_initializer,
+                        strides=(pre_strides[i], pre_strides[i]),
+                        use_bias=False),
+                ])
+            conv_sequential.add(tf.keras.Sequential([
                 BatchNormalization(axis=bn_axis,
                                    momentum=self.batchnorm_momentum,
                                    epsilon=self.batchnorm_epsilon),
                 Activation(self.activation)
-            ])
+            ]))
             self.pre_layers.append(conv_sequential)
 
-        # entry flow
-        # 256,256,64 -> 128,128,128
+        # 512,512,64 -> 256,256,128
         self.entry_layer1 = XceptionBlock(depth_list=[128, 128, 128],
                                           skip_connection_type='conv',
                                           stride=2,
                                           depth_activation=False)
-
-        # 128,128,128 -> 64,64,256
-        # skip = 128,128,256
+        # 256,256,128 -> 128,128,256
+        # skip = 256,256,256                
         self.entry_layer2 = XceptionBlock(depth_list=[256, 256, 256],
-                                          skip_connection_type='conv',
-                                          stride=2,
-                                          depth_activation=False,
-                                          return_skip=True)
-
-        # 64,64,256 -> 64,64,728
+                                    skip_connection_type='conv',
+                                    stride=2,
+                                    depth_activation=False,
+                                    return_skip=True)
+        # 128,128,256 -> 128,128,728
         self.entry_layer3 = XceptionBlock(depth_list=[728, 728, 728],
                                           skip_connection_type='conv',
                                           stride=1,
                                           depth_activation=False)
-
         # middle flow
-        # 64,64,728 -> 64,64,728
+        # 128,128,728 -> 128,128,728
         self.middle_layers = []
         for i in range(16):
             self.middle_layers.append(
@@ -86,7 +96,7 @@ class Xception(tf.keras.layers.Layer):
                               stride=1,
                               rate=1,
                               depth_activation=False))
-
+        
         # exit flow
         # 64,64,728 -> 64,64,1024
         self.exit_layer1 = XceptionBlock(depth_list=[728, 1024, 1024],
@@ -106,30 +116,25 @@ class Xception(tf.keras.layers.Layer):
             training = tf.keras.backend.learning_phase()
 
         result = inputs
-
-        # pre
         for layer in self.pre_layers:
             result = tf.cast(layer(result, training=training), inputs.dtype)
-
-        # entry flow
+        
         result = tf.cast(self.entry_layer1(result, training=training),
                          inputs.dtype)
         result, skip1 = self.entry_layer2(result, training=training)
         result = tf.cast(self.entry_layer3(result, training=training),
                          inputs.dtype)
-
         # middle flow
         for layer in self.middle_layers:
             result = tf.cast(layer(result, training=training), inputs.dtype)
-
-        # exit flow
+        
+       # exit flow
         result = tf.cast(self.exit_layer1(result, training=training),
                          inputs.dtype)
         result = tf.cast(self.exit_layer2(result, training=training),
                          inputs.dtype)
-
         return result, skip1
-
+         
     def get_config(self):
         config = {
             'kernel_initializer':

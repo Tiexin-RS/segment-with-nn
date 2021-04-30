@@ -14,7 +14,13 @@ class FocalLoss(tf.keras.losses.Loss):
         self.alpha = alpha
 
     def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true[:, :, :, 1], dtype=tf.int32)
+        y_pred = tf.cast(y_pred, dtype=tf.float32)
+        tf.print(tf.shape(y_pred))
+        tf.print(y_pred.shape)
         y_true = tf.one_hot(y_true, y_pred.shape[3])
+        tf.print(tf.shape(y_true))
+        tf.print(y_true.shape)
         y_pred += K.epsilon()
         ce = -y_true * tf.math.log(y_pred)
         weight = tf.math.pow(1 - y_pred, self.gamma) * y_true

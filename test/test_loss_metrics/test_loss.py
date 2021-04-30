@@ -16,7 +16,7 @@ class TestLoss(tf.test.TestCase):
                                         maxval=1,
                                         dtype=tf.float32)
 
-    def test_focal_loss(self):
+    def _test_focal_loss(self):
         focall = FocalLoss()
         loss = focall(self.y_true, self.y_pred)
         self.assertAllEqual(loss.shape, ())
@@ -40,3 +40,7 @@ class TestLoss(tf.test.TestCase):
         boundaryl = BoundaryLoss()
         loss = boundaryl(self.y_true, self.y_pred)
         self.assertAllEqual(loss.shape, ())
+
+
+if __name__ == '__main__':
+    tf.test.main()

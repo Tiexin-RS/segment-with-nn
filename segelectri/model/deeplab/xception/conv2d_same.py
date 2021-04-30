@@ -6,6 +6,7 @@ from tensorflow.keras.layers import (Conv2D, ZeroPadding2D)
 
 
 class Conv2dSame(tf.keras.layers.Layer):
+
     def __init__(self,
                  filters,
                  stride=1,
@@ -41,10 +42,6 @@ class Conv2dSame(tf.keras.layers.Layer):
                    dilation_rate=(self.rate, self.rate))
         ])
 
-    def call(self, inputs, training=None):
-        if training is None:
-            training = tf.keras.backend.learning_phase()
-
         # 计算padding的数量，hw是否需要收缩
         if self.stride != 1:
             kernel_size_effective = self.kernel_size + (self.kernel_size -
@@ -52,7 +49,15 @@ class Conv2dSame(tf.keras.layers.Layer):
             pad_total = kernel_size_effective - 1
             pad_beg = pad_total // 2
             pad_end = pad_total - pad_beg
-            inputs = ZeroPadding2D((pad_beg, pad_end))(inputs)
+            self.zero_padding = ZeroPadding2D((pad_beg, pad_end))
+
+    def call(self, inputs, training=None):
+        if training is None:
+            training = tf.keras.backend.learning_phase()
+
+        # 计算padding的数量，hw是否需要收缩
+        if self.stride != 1:
+            inputs = self.zero_padding(inputs)
 
         result = tf.cast(self.conv_sequential(inputs, training=training),
                          inputs.dtype)
@@ -62,17 +67,17 @@ class Conv2dSame(tf.keras.layers.Layer):
     def get_config(self):
         config = {
             'filters':
-            self.filters,
+                self.filters,
             'stride':
-            self.stride,
+                self.stride,
             'kernel_size':
-            self.kernel_size,
+                self.kernel_size,
             'rate':
-            self.rate,
+                self.rate,
             'kernel_initializer':
-            tf.keras.initializers.serialize(self.kernel_initializer),
+                tf.keras.initializers.serialize(self.kernel_initializer),
             'kernel_regularizer':
-            tf.keras.regularizers.serialize(self.kernel_regularizer),
+                tf.keras.regularizers.serialize(self.kernel_regularizer),
         }
         base_config = super(Conv2dSame, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

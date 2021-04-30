@@ -7,6 +7,7 @@ from tensorflow.keras.layers import (Activation, BatchNormalization, Conv2D,
 
 
 class SepconvBn(tf.keras.layers.Layer):
+
     def __init__(self,
                  filters,
                  stride=1,
@@ -44,7 +45,7 @@ class SepconvBn(tf.keras.layers.Layer):
         else:
             depth_padding = 'valid'
 
-        self.activate = tf.keras.Sequential([Activation(self.activation)])
+        self.activate = Activation(self.activation)
 
         # 分离卷积，3x3采用膨胀卷积
         self.expand_conv = tf.keras.Sequential([
@@ -80,24 +81,25 @@ class SepconvBn(tf.keras.layers.Layer):
             self.compress_conv.add(
                 tf.keras.Sequential([Activation(self.activation)]))
 
+        if self.stride != 1:
+            kernel_size_effective = self.kernel_size + (self.kernel_size - 1) * (self.rate - 1)
+            pad_total = kernel_size_effective - 1
+            pad_beg = pad_total // 2
+            pad_end = pad_total - pad_beg
+            self.zero_padding = ZeroPadding2D((pad_beg, pad_end))
+
     def call(self, inputs, training=None):
         if training is None:
             training = tf.keras.backend.learning_phase()
 
         # 计算padding的数量，hw是否需要收缩
         if self.stride != 1:
-            kernel_size_effective = self.kernel_size + (self.kernel_size -
-                                                        1) * (self.rate - 1)
-            pad_total = kernel_size_effective - 1
-            pad_beg = pad_total // 2
-            pad_end = pad_total - pad_beg
-            inputs = ZeroPadding2D((pad_beg, pad_end))(inputs)
+            inputs = self.zero_padding(inputs)
 
         # 如果需要激活函数
         if not self.depth_activation:
             inputs = tf.cast(self.activate(inputs, training=training),
                              inputs.dtype)
-
         result = tf.cast(self.expand_conv(inputs, training=training),
                          inputs.dtype)
         result = tf.cast(self.compress_conv(result, training=training),
@@ -108,25 +110,25 @@ class SepconvBn(tf.keras.layers.Layer):
     def get_config(self):
         config = {
             'filters':
-            self.filters,
+                self.filters,
             'stride':
-            self.stride,
+                self.stride,
             'kernel_size':
-            self.kernel_size,
+                self.kernel_size,
             'rate':
-            self.rate,
+                self.rate,
             'depth_activation':
-            self.depth_activation,
+                self.depth_activation,
             'kernel_initializer':
-            tf.keras.initializers.serialize(self.kernel_initializer),
+                tf.keras.initializers.serialize(self.kernel_initializer),
             'kernel_regularizer':
-            tf.keras.regularizers.serialize(self.kernel_regularizer),
+                tf.keras.regularizers.serialize(self.kernel_regularizer),
             'batchnorm_momentum':
-            self.batchnorm_momentum,
+                self.batchnorm_momentum,
             'batchnorm_epsilon':
-            self.batchnorm_epsilon,
+                self.batchnorm_epsilon,
             'activation':
-            self.activation,
+                self.activation,
         }
         base_config = super(SepconvBn, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

@@ -8,35 +8,36 @@ from tensorflow.keras.layers import MaxPool2D
 
 
 class FocalLoss(tf.keras.losses.Loss):
+
     def __init__(self, gamma=2.0, alpha=0.25, **kwargs):
         super(FocalLoss, self).__init__(**kwargs)
         self.gamma = gamma
         self.alpha = alpha
 
     def call(self, y_true, y_pred):
-        y_true = tf.cast(y_true[:, :, :, 1], dtype=tf.int32)
+        y_true = tf.cast(y_true, dtype=tf.float32)
         y_pred = tf.cast(y_pred, dtype=tf.float32)
-        tf.print(tf.shape(y_pred))
-        tf.print(y_pred.shape)
-        y_true = tf.one_hot(y_true, y_pred.shape[3])
-        tf.print(tf.shape(y_true))
-        tf.print(y_true.shape)
         y_pred += K.epsilon()
-        ce = -y_true * tf.math.log(y_pred)
-        weight = tf.math.pow(1 - y_pred, self.gamma) * y_true
-        fl = ce * weight * self.alpha
-        loss = tf.reduce_mean(fl)
+        ce = tf.multiply(y_true, -tf.math.log(y_pred))
+        weight = tf.multiply(y_true, tf.pow(tf.subtract(1., y_pred),
+                                            self.gamma))
+        fl = tf.multiply(self.alpha, tf.multiply(weight, ce))
+        loss = tf.reduce_max(fl, axis=1)
         return loss
 
 
 class LovaszLoss(tf.keras.losses.Loss):
+
     def __init__(self, **kwargs):
         super(LovaszLoss, self).__init__(**kwargs)
 
     def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, dtype=tf.float32)
+        y_pred = tf.cast(y_pred, dtype=tf.float32)
+        y_true = tf.argmax(y_true, axis=-1)
         C1 = y_pred.shape[3]
         y_pred = tf.reshape(y_pred, (-1, C1))
-        y_true = tf.reshape(y_true, (-1, ))
+        y_true = tf.reshape(y_true, (-1,))
         C2 = y_pred.shape[1]
         losses = []
         present = []
@@ -70,6 +71,7 @@ class LovaszLoss(tf.keras.losses.Loss):
 
 
 class DiceLoss(tf.keras.losses.Loss):
+
     def __init__(self,
                  loss_type='jaccard',
                  axis=(1, 2, 3),
@@ -81,7 +83,8 @@ class DiceLoss(tf.keras.losses.Loss):
         self.smooth = smooth
 
     def call(self, y_true, y_pred):
-        y_true = tf.one_hot(y_true, y_pred.shape[3])
+        y_true = tf.cast(y_true, dtype=tf.float32)
+        y_pred = tf.cast(y_pred, dtype=tf.float32)
         inse = tf.reduce_sum(y_pred * y_true, axis=self.axis)
         if self.loss_type == 'jaccard':
             l = tf.reduce_sum(y_pred * y_pred, axis=self.axis)
@@ -95,15 +98,19 @@ class DiceLoss(tf.keras.losses.Loss):
 
 
 class BoundaryLoss(tf.keras.losses.Loss):
+
     def __init__(self, **kwargs):
         super(BoundaryLoss, self).__init__(**kwargs)
 
     def call(self, y_true, y_pred):
-        y_true = tf.one_hot(y_true, y_pred.shape[3])
+        y_true = tf.cast(y_true, dtype=tf.float32)
+        y_pred = tf.cast(y_pred, dtype=tf.float32)
         y_pred_bd = MaxPool2D(pool_size=(3, 3), strides=(1, 1),
                               padding='same')(1 - y_pred)
         y_true_bd = MaxPool2D(pool_size=(3, 3), strides=(1, 1),
                               padding='same')(1 - y_true)
+        y_pred_bd = tf.cast(y_pred_bd, dtype=tf.float32)
+        y_true_bd = tf.cast(y_true_bd, dtype=tf.float32)
         y_pred_bd = y_pred_bd - (1 - y_pred)
         y_true_bd = y_true_bd - (1 - y_true)
 
@@ -113,6 +120,8 @@ class BoundaryLoss(tf.keras.losses.Loss):
         y_true_bd_ext = MaxPool2D(pool_size=(5, 5),
                                   strides=(1, 1),
                                   padding='same')(1 - y_true)
+        y_pred_bd_ext = tf.cast(y_pred_bd_ext, dtype=tf.float32)
+        y_true_bd_ext = tf.cast(y_true_bd_ext, dtype=tf.float32)
         y_pred_bd_ext = y_pred_bd_ext - (1 - y_pred)
         y_true_bd_ext = y_true_bd_ext - (1 - y_true)
 

@@ -220,7 +220,10 @@ class Decoder(keras.layers.Layer):
                                 kernel_size=(3, 3),
                                 padding='same'),
             keras.layers.UpSampling2D(size=outputs_unsample_rates,
-                                      interpolation='bilinear')
+                                      interpolation='bilinear'),
+            keras.layers.Activation('softmax',
+                                    dtype='float32',
+                                    name='predictions')
         ])
 
     def call(self, inputs, **kwargs):
@@ -228,7 +231,7 @@ class Decoder(keras.layers.Layer):
         """
         low_feats, high_feats = inputs
         x = tf.concat([
-            self.low_feats_conv(low_feats),
+            tf.cast(self.low_feats_conv(low_feats), dtype=tf.float32),
             self.high_feats_upsample(high_feats)
         ],
                       axis=-1)

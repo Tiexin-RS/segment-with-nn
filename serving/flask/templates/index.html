@@ -1,0 +1,30 @@
+<div class="page-wrap single shop">
+    <!-- Breadcrumbs -->
+    <div class="page-content">
+        <main class="main-content">
+            <!--下面是用户名输入框-->
+            <div class="container">
+                <div class="row">
+                    <div class="form-container">
+                        <form class="form-horizontal" action="" enctype='multipart/form-data' method='POST'>
+                            <div class="form-group">
+                                <label><input type="file" name="file" /></label>
+                            </div>
+
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-default" >上传图片</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div>
+    {% if upload_path %}
+    <img src="{{ url_for('static', filename=upload_path) }}" width='100' alt="初始">
+    <img src="{{ url_for('static', filename=data_save_path) }}" width='100' alt="结果">
+    {% endif %}
+</div>

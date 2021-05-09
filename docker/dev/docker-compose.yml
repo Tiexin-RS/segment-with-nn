@@ -14,3 +14,17 @@ services:
     volumes: 
       - ./:/opt/segelectri:rw
       - ${DATA_DIR}:/opt/dataset:rw
+    # extra_hosts:
+      # - "host.docker.internal:host-gateway"
+  tvm:
+    user: "${UID}:${GID}"
+    build:
+      context: .
+      dockerfile: ./Dockerfile.tvm
+    # runtime: nvidia
+    env_file: .env
+    tty: true
+    stdin_open: true
+    volumes: 
+      - ./:/opt/segelectri:rw
+      - ${TVM_DIR}:/workspace

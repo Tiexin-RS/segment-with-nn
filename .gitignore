@@ -130,10 +130,11 @@ dmypy.json
 
 # ignore root files
 /docker-compose.yml
-/Dockerfile
+/Dockerfile*
 .vscode/
 exp*
 img*
 tmp*
 trt_savedmodel*
 static*
+ml-transferlearing*

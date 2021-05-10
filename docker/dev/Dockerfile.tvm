@@ -1,0 +1,6 @@
+FROM tvmai/demo-cpu
+
+ENV TVM_HOME=/workspace
+ENV PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
+
+CMD [ "bash" ]

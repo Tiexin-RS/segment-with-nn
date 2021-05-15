@@ -1,8 +1,9 @@
 dev:
-	./scripts/start_env.sh docker/dev
+	./scripts/start_env.sh docker/dev up -d
 
 dev-build:
-	./scripts/start_env.sh docker/dev --build
-	
+	./scripts/start_env.sh docker/dev up -d --build
+
 attach:
-	docker-compose exec ${MODE} bash
+	./scripts/start_env.sh docker/dev exec ${POD_NAME} bash
+	

@@ -1,6 +1,15 @@
-FROM tvmai/demo-cpu
+FROM tlcpack/ci-gpu:v0.74
+
+RUN apt install zsh wget git -y
+
+ENV HOME=/opt/env/
+RUN mkdir -p ${HOME} && chmod 777 ${HOME}
 
 ENV TVM_HOME=/workspace
+ENV SHELL=/bin/bash
 ENV PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
+ENV PATH=$HOME/.local/bin:$PATH
+
+RUN python3 -m pip install -U pip setuptools tensorflow ipython -i https://pypi.doubanio.com/simple
 
 CMD [ "bash" ]

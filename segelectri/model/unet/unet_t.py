@@ -1,3 +1,4 @@
+from os import name
 import tensorflow as tf
 from tensorflow import keras
 from .backbone import Backbone
@@ -21,10 +22,20 @@ class downsamp_conv(keras.layers.Layer):
         self.conv_seq = keras.Sequential([
             keras.layers.Conv2D(filters=self.filters_num,
                                 kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
                                 padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
             keras.layers.Conv2D(filters=self.filters_num,
                                 kernel_size=(3, 3),
-                                padding='same')
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
+                                padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
         ])
 
     def call(self, inputs):
@@ -55,14 +66,29 @@ class upsamp_conv(keras.layers.Layer):
         self.upsample_seq = keras.Sequential([
             keras.layers.Conv2D(filters=self.filters_num,
                                 kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
                                 padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
             keras.layers.Conv2D(filters=self.filters_num,
                                 kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
                                 padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
             keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear'),
             keras.layers.Conv2D(filters=self.filters_num / 2,
                                 kernel_size=(2, 2),
-                                padding='same')
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
+                                padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one')
         ])
 
     def call(self, inputs):
@@ -83,6 +109,10 @@ class Unet(keras.Model):
         """Initialize Unet
         Args:
             min_kernel_num:num of filters in the toppest layer
+            num_classes:num of classes used to do segmetation
+            depth:depth of unet,only under pre_encoder == False shall this param be valid
+            pre_encoder:denote whether to load MobileNetV2 as encoder or not
+            layer_names:denote layer_names when using pre_encoder
         """
         super(Unet, self).__init__(**kwargs)
         self.min_kernel_num = min_kernel_num // 1  #assure that is a int
@@ -112,9 +142,13 @@ class Unet(keras.Model):
                 tf.keras.layers.experimental.preprocessing.Rescaling(1./255)
             ])
         # use loop to wrap a list
+        self.pre_encoder_layers = []
         self.down_conv_layers = []
-        for k in self.down_kernel_num_seq:
-            self.down_conv_layers.append(downsamp_conv(k))
+        if self.pre_encoder:
+           self.pre_encoder_layers = Backbone(layer_names = self.layer_names) 
+        else:
+            for k in self.down_kernel_num_seq:
+                self.down_conv_layers.append(downsamp_conv(k))
         
         # use loop to wrap a list
         self.up_conv_layers = []
@@ -125,16 +159,60 @@ class Unet(keras.Model):
         self.output_seq = keras.Sequential([
             keras.layers.Conv2D(filters=self.down_kernel_num_seq[0],
                                 kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
                                 padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
             keras.layers.Conv2D(filters=self.down_kernel_num_seq[0],
                                 kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
                                 padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
             keras.layers.Conv2D(filters=self.num_classes,
                                 kernel_size=(3, 3),
-                                padding='same')
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
+                                padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
         ])
-
+        self.extra_upsample = None
+        if self.pre_encoder:
+            self.extra_upsample = keras.Sequential([
+            keras.layers.Conv2D(filters=32,
+                                kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
+                                padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
+            keras.layers.Conv2D(filters=32,
+                                kernel_size=(3, 3),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
+                                padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one'),
+            keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear'),
+            keras.layers.Conv2D(filters=16,
+                                kernel_size=(2, 2),
+                                kernel_initializer='he_normal',
+                                activation = 'relu',
+                                padding='same'),
+            keras.layers.BatchNormalization(axis = -1,
+                                beta_initializer='zero',
+                                gamma_initializer='one')
+        ])
         self.pooling = keras.layers.MaxPooling2D(pool_size=(2, 2))
+        self.softmax = keras.layers.Softmax(axis=-1,name = 'predictor')
 
     def call(self, inputs):
         tf.cast(inputs, dtype=tf.float32)
@@ -157,22 +235,31 @@ class Unet(keras.Model):
 
         self.up_samp_list = []
         self.corp_list = []
-        
+
+        if self.pre_encoder:
+            self.pool_list.append(self.pooling(self.conv_list[-1])) # turn 64*64 to 32*32        
         self.corp_list.append(self.pool_list[-1]) # init
-        tmp_conv_list = self.conv_list[::-1]
+        tmp_conv_list = self.conv_list[::-1].copy()
+
 
         for c,u in zip(tmp_conv_list,self.up_conv_layers):
             self.up_samp_list.append(u(self.corp_list[-1]))
             self.corp_list.append(tf.concat([c,self.up_samp_list[-1]],axis = -1))
         
-        output = self.output_seq(self.corp_list[-1])
+        pre_output = self.corp_list[-1]
+        if self.pre_encoder:
+            pre_output = self.extra_upsample(pre_output)
+        x = self.output_seq(pre_output)
+        output = self.softmax(x)
         return output
 
     def get_config(self):
         config = {
             'min_kernel_num':self.min_kernel_num,
             'num_classes':self.num_classes,
-            'depth':self.depth
+            'depth':self.depth,
+            'pre_encoder':self.pre_encoder,
+            'layer_names':self.layer_names
         }
         # cancel base config
         return config
@@ -434,3 +521,4 @@ def get_ordinary_unet(input_shape = (1024,1024,3),depth = 4,num_classes = 4,resi
     outputs = keras.layers.Softmax(axis=-1,name = 'predictor')(x)
     model = keras.Model(inputs, outputs, name="functional_unet")
     return model
+

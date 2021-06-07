@@ -138,7 +138,6 @@ tmp*
 trt_savedmodel*
 static*
 ml_classification*
-
 # ignore tvm related
 tvm*
 
@@ -146,3 +145,4 @@ tvm*
 *_model
 *frozen
 install.sh
+profile-sdk*

@@ -10,14 +10,12 @@ from segelectri.model.unet.unet_t import get_unet
 from segelectri.loss_metrics.loss import FocalLoss, LovaszLoss, DiceLoss, BoundaryLoss
 from segelectri.loss_metrics.metrics import MeanIou
 import tempfile
-# import tensorflow_model_optimization as tfmot
 
 
 if __name__ == '__main__':
     # Try to add mix precision to accelerate train speed
     policy = tf.keras.mixed_precision.Policy('mixed_float16')
     tf.keras.mixed_precision.set_global_policy(policy)
-    # tf.config.optimizer.set_jit(True)
     
     with tf.device('/cpu:0'):
         ds = get_tr_ds(

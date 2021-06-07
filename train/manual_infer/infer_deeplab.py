@@ -9,8 +9,6 @@ from segelectri.loss_metrics.metrics import MeanIou
 def read_image(file_name, resize=True):
     img = tf.io.read_file(filename=file_name)
     img = tf.io.decode_image(img)
-    if resize:
-        img = tf.image.resize(img, [224, 224])
     return img
 
 
@@ -22,18 +20,15 @@ def save_image(save_data, save_path):
 
 def get_label(label_path, resize=True):
     label_data = read_image(label_path, resize)
+    label_data = tf.image.resize(label_data, [224, 224])
     label_data = label_data[:, :, 1]
     return label_data
 
 
 def get_pred(seg_model, data_path, resize=True):
     ori_data = read_image(data_path, resize)
-    if resize:
-        ori_data = tf.cast(tf.reshape(ori_data,
-                                      (-1, 224, 224, 3)), tf.float32) / 255.0
-    else:
-        ori_data = tf.cast(tf.reshape(ori_data,
-                                      (-1, 1024, 1024, 3)), tf.float32) / 255.0
+    ori_data = tf.cast(tf.reshape(ori_data,
+                                (-1, 1024, 1024, 3)), tf.float32)
     pred_data = seg_model.predict(ori_data)
     pred_data = tf.argmax(pred_data, axis=-1)
     if resize:

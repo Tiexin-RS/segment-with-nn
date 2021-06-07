@@ -2,6 +2,8 @@ from flask import Flask, request, render_template, jsonify
 import os
 import uuid
 import io
+import json
+import matplotlib.pyplot as plt
 from PIL import Image
 import tensorflow as tf
 from segelectri.loss_metrics.loss import FocalLoss, LovaszLoss, DiceLoss, BoundaryLoss
@@ -13,6 +15,10 @@ app.config["SECRET_KEY"] = 'TPmi4aLWRbyVq8zu9v82dWYW1'
 
 model = None
 
+def save_image(save_data, save_path):
+    plt.imshow(save_data)
+    plt.colorbar()
+    plt.savefig(save_path, dpi=300)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1] in set(['png', 'PNG'])
@@ -20,12 +26,12 @@ def allowed_file(filename):
 
 def upload_image(rest_ful=False):
     if rest_ful:
-        image = request.files['file'].read()
-        image = Image.open(io.BytesIO(image))
+        data = json.loads(request.get_data(as_text=True))
+        image = tf.constant(data['file'])
         basepath = os.path.dirname(__file__)
         new_filename = 'upload_img/' + str(uuid.uuid1()) + '.png'
         upload_path = os.path.join(basepath, './static/', new_filename)
-        image.save(upload_path)
+        save_image(image, upload_path)
         return new_filename
     else:
         f = request.files.get('file')
@@ -54,20 +60,16 @@ def load_model():
                                                'BoundaryLoss': BoundaryLoss
                                            })
 
-
-@app.route('/predict', methods=['POST'])
-def predict():
+@app.route('/predicted', methods=['POST'])
+def predicted():
     data = {"success": False}
     if request.method == 'POST':
-        upload_path = upload_image(rest_ful=True)
-        if upload_path != '':
-            data_path = './static/' + upload_path
-            data_save_path = 'pred_img/' + str(uuid.uuid1()) + '.png'
-            show_pred(seg_model, data_path, './static/' + data_save_path)
-            data["success"] = True
-            data['data_save_path'] = data_save_path
+        data = json.loads(request.get_data(as_text=True))
+        image = tf.constant(data['file'])
+        pred_data = seg_model.predict(image)
+        data["success"] = True
+        data["file"] = pred_data.tolist()
         return jsonify(data)
-
 
 @app.route('/', methods=['POST', 'GET'])
 def seg():

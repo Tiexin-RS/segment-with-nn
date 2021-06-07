@@ -31,12 +31,11 @@ def train(loss_list,
                        batch_size=batch_size)
 
         def reshape_fn(d, l):
-            d = tf.cast(tf.reshape(d, (-1, 1024, 1024, 3)), tf.float32) / 255.0
+            d = tf.cast(tf.reshape(d, (-1, 1024, 1024, 3)), tf.float32)
             l = l[:, :, :, 1]
             l = tf.one_hot(l, 4)
             l = tf.reshape(l, (-1, 1024, 1024, 4))
             if resize:
-                d = tf.image.resize(d, [224, 224])
                 l = tf.image.resize(l, [224, 224])
             return d, l
 

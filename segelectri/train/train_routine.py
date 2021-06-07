@@ -31,7 +31,7 @@ class TrainRoutine:
     @staticmethod
     def _make_needed_dirs(exp_dir):
         tensorboard_dir = os.path.join(exp_dir, 'events')
-        saved_model_dir = os.path.join(exp_dir, 'saved_model')
+        saved_model_dir = os.path.join(exp_dir, 'saved_model/1')
         config_dir = os.path.join(exp_dir, 'config')
         log_dir = os.path.join(exp_dir, 'log')
 

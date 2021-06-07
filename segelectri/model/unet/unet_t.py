@@ -2,6 +2,8 @@ from os import name
 import tensorflow as tf
 from tensorflow import keras
 from .backbone import Backbone
+import tensorflow_model_optimization as tfmot
+import numpy as np
 
 
 class downsamp_conv(keras.layers.Layer):
@@ -102,7 +104,7 @@ class upsamp_conv(keras.layers.Layer):
 
 
 class Unet(keras.Model):
-    def __init__(self, min_kernel_num=64, num_classes=10,depth = 4,pre_encoder = False,
+    def __init__(self, min_kernel_num=64, num_classes=10,depth = 4,pre_encoder = False,resize = False,
                 layer_names=['block_1_expand_relu', 'block_2_project_BN', 'block_4_project_BN', 'block_6_project_BN'],**kwargs):
         """Initialize Unet
         Args:
@@ -117,6 +119,7 @@ class Unet(keras.Model):
         self.num_classes = num_classes
         self.depth = depth
         self.pre_encoder = pre_encoder
+        self.resize = resize
         self.layer_names = layer_names
         if self.pre_encoder:
             self.depth = 4 #depth has to be 4
@@ -132,7 +135,12 @@ class Unet(keras.Model):
 
     def build(self, input_shape):
         self.shape = input_shape
-
+        self.resize_and_rescale_layer = None
+        if self.resize:
+            self.resize_and_rescale_layer = tf.keras.Sequential([
+                tf.keras.layers.experimental.preprocessing.Resizing(224, 224),
+                tf.keras.layers.experimental.preprocessing.Rescaling(1./255)
+            ])
         # use loop to wrap a list
         self.pre_encoder_layers = []
         self.down_conv_layers = []
@@ -210,11 +218,14 @@ class Unet(keras.Model):
         tf.cast(inputs, dtype=tf.float32)
         x = inputs
 
+        if self.resize:
+            x = self.resize_and_rescale_layer(x) # as initial
+
         self.conv_list = []
         self.pool_list = []
 
         if self.pre_encoder:
-            self.pool_list = self.pre_encoder_layers(inputs) # len(self.pool_list) = 4
+            self.pool_list = self.pre_encoder_layers(x) # len(self.pool_list) = 4
             self.conv_list = self.pool_list.copy()
         else:
             for k in self.down_conv_layers:
@@ -252,3 +263,262 @@ class Unet(keras.Model):
         }
         # cancel base config
         return config
+
+def get_unet(input_shape = (1024,1024,3),depth = 4,num_classes = 4):
+    """
+        input_shape:the size of input which will be indicated in the Input
+        depth:depth of unet
+        num_classes:num of class wanna predict
+    """
+    inputs = keras.Input(shape = input_shape,name = "input_1")
+    base_filter_num = 64
+    filter_list = []
+    for i in range(depth):
+        filter_list.append(base_filter_num*(2**i)) # 64 * 2^0 = 64 and so on
+    x = inputs # as initial
+    skip_connection_list = []
+    # downsamp_stage
+    for i in range(depth):
+        if i != 0:
+            x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+        x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        skip_connection_list.append(x)
+    
+    # bottleneck_stage
+    bottleneck_filter_num = filter_list[-1]*2
+    x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+    x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same'))(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same'))(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # up_samp_stage
+    for i in range(depth):
+        x = keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(x)
+        x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(tf.concat([x, skip_connection_list[-i-1]],axis = -1))
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # output & softmax stage
+    x = tfmot.quantization.keras.quantize_annotate_layer(keras.layers.Conv2D(filters=num_classes,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same'))(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    outputs = keras.layers.Softmax(axis=-1,name = 'predictor')(x)
+    model = keras.Model(inputs, outputs, name="functional_unet")
+    return model
+
+def get_prunable_unet(input_shape = (1024,1024,3),depth = 4,num_classes = 4):
+    """
+        input_shape:the size of input which will be indicated in the Input
+        depth:depth of unet
+        num_classes:num of class wanna predict
+    """
+    #set pruning_schedule
+    pruning_schedule = tfmot.sparsity.keras.PolynomialDecay(
+                        initial_sparsity=0.0, final_sparsity=0.5,
+                        begin_step=500, end_step=2000)
+    inputs = keras.Input(shape = input_shape,name = "input_1")
+    base_filter_num = 64
+    filter_list = []
+    for i in range(depth):
+        filter_list.append(base_filter_num*(2**i)) # 64 * 2^0 = 64 and so on
+    x = inputs # as initial
+    skip_connection_list = []
+    # downsamp_stage
+    for i in range(depth):
+        if i != 0:
+            x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+        x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        skip_connection_list.append(x)
+    
+    # bottleneck_stage
+    bottleneck_filter_num = filter_list[-1]*2
+    x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+    x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same'))(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same'))(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # up_samp_stage
+    for i in range(depth):
+        x = keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(x)
+        x = tf.concat([x, skip_connection_list[-i-1]],axis = -1)# for instance -0-1= - 1,we get the last layer
+        x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same'))(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # output & softmax stage
+    x = tfmot.sparsity.keras.prune_low_magnitude(keras.layers.Conv2D(filters=num_classes,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same'))(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    outputs = keras.layers.Softmax(axis=-1,name = 'predictor')(x)
+    model = keras.Model(inputs, outputs, name="functional_unet")
+    return model
+
+def get_cluster_unet(input_shape = (1024,1024,3),depth = 4,num_classes = 4):
+    """
+        input_shape:the size of input which will be indicated in the Input
+        depth:depth of unet
+        num_classes:num of class wanna predict
+    """
+    inputs = keras.Input(shape = input_shape,name = "input_1")
+    base_filter_num = 64
+    filter_list = []
+    for i in range(depth):
+        filter_list.append(base_filter_num*(2**i)) # 64 * 2^0 = 64 and so on
+    x = inputs # as initial
+    skip_connection_list = []
+    # downsamp_stage
+    for i in range(depth):
+        if i != 0:
+            x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+        x = keras.layers.Conv2D(filters=filter_list[i],kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        skip_connection_list.append(x)
+    
+    # bottleneck_stage
+    bottleneck_filter_num = filter_list[-1]*2
+    x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+    x = keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same')(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    x = keras.layers.Conv2D(filters=filter_list[i],
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same')(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # up_samp_stage
+    for i in range(depth):
+        x = keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(x)
+        x = tf.concat([x, skip_connection_list[-i-1]],axis = -1)# for instance -0-1= - 1,we get the last layer
+        x = keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # output & softmax stage
+    x = keras.layers.Conv2D(filters=num_classes,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same')(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    outputs = keras.layers.Softmax(axis=-1,name = 'predictor')(x)
+    model = keras.Model(inputs, outputs, name="functional_unet")
+    return model
+
+def get_ordinary_unet(input_shape = (1024,1024,3),depth = 4,num_classes = 4,resize = False,mixed_float16 = False):
+    """
+        input_shape:the size of input which will be indicated in the Input
+        depth:depth of unet
+        num_classes:num of class wanna predict
+    """
+    inputs = keras.Input(shape = input_shape,name = "input_1")
+    base_filter_num = 64
+    filter_list = []
+    for i in range(depth):
+        filter_list.append(base_filter_num*(2**i)) # 64 * 2^0 = 64 and so on
+    resize_and_rescale_layer = None
+    if resize:
+        resize_and_rescale_layer = tf.keras.Sequential([
+            tf.keras.layers.experimental.preprocessing.Resizing(224, 224),
+            tf.keras.layers.experimental.preprocessing.Rescaling(1./255)
+        ])
+        x = resize_and_rescale_layer(inputs) # as initial
+    else:
+        x = inputs
+    skip_connection_list = []
+    dtype = None
+    if mixed_float16:
+        dtype = 'float16'
+    else:
+        dtype = 'float32'
+    # downsamp_stage
+    for i in range(depth):
+        if i != 0:
+            x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+        x = keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = keras.layers.Conv2D(filters=filter_list[i],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        skip_connection_list.append(tf.cast(x,tf.float32))
+    
+    # bottleneck_stage
+    bottleneck_filter_num = filter_list[-1]*2
+    x = keras.layers.MaxPooling2D(pool_size = (2,2))(x)
+    x = keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same')(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    x = keras.layers.Conv2D(filters=bottleneck_filter_num,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same')(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # up_samp_stage
+    for i in range(depth):
+        x = keras.layers.UpSampling2D(size=(2, 2), interpolation='bilinear')(x)
+        x = keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(tf.concat([x, skip_connection_list[-i-1]],axis = -1))
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+        x = keras.layers.Conv2D(filters=filter_list[-i-1],
+                                kernel_size=(3, 3),kernel_initializer='he_normal',
+                                activation = 'relu',padding='same')(x)
+        x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+
+    # output & softmax stage
+    x = keras.layers.Conv2D(filters=num_classes,
+                            kernel_size=(3, 3),kernel_initializer='he_normal',
+                            activation = 'relu',padding='same')(x)
+    x = keras.layers.BatchNormalization(axis = -1,beta_initializer='zero',gamma_initializer='one')(x)
+    outputs = keras.layers.Softmax(axis=-1,name = 'predictor')(x)
+    model = keras.Model(inputs, outputs, name="functional_unet")
+    return model
+

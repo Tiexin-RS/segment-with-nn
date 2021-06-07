@@ -4,5 +4,6 @@ matplotlib==3.3.3
 yapf==0.30.0
 tensorflow-io==0.17.0
 ipykernel==5.4.3
+tensorflow_model_optimization==0.5.0
 tensorflow-serving-api==2.4.0
 locust==1.5.2

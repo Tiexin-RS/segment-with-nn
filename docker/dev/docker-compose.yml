@@ -21,10 +21,13 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.tvm
-    # runtime: nvidia
+    runtime: nvidia
     env_file: .env
     tty: true
     stdin_open: true
     volumes: 
       - ./:/opt/segelectri:rw
-      - ${TVM_DIR}:/workspace
+      - ${TVM_DIR}:/workspace:rw
+      - ${DATA_DIR}:/opt/dataset:rw
+    extra_hosts:
+      - "raw.githubusercontent.com:185.199.108.133"
